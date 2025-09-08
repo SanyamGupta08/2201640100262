@@ -1,39 +1,26 @@
-const fs = require("fs");
-const path = require("path");
+const axios = require("axios");
 
-const logFilePath = path.join(__dirname, "logging.txt");
+const LOG_API = "http://20.244.56.144/evaluation-service/logs";
+const TOKEN = process.env.AUTH_TOKEN; // ensure in .env file
 
-// GET logging middleware
-function getLog(req, res, next) {
-  // Ensure the log file exists
-  if (!fs.existsSync(logFilePath)) {
-    fs.writeFileSync(logFilePath, "", "utf8");
+async function Log(stack, level, pkg, message) {
+  try {
+    const payload = {
+      stack: stack.toLowerCase(), // must be lowercase
+      level: level.toLowerCase(),
+      package: pkg.toLowerCase(),
+      message,
+    };
+
+    await axios.post(LOG_API, payload, {
+      headers: {
+        Authorization: `Bearer ${TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (error) {
+    console.error("Logging failed:", error.response?.data || error.message);
   }
-
-  const id = req.query.id || "N/A";
-  const logMessage = `[${new Date().toISOString()}] Request: GET, Query ID: ${id}`;
-  fs.appendFile(logFilePath, logMessage + "\n", (err) => {
-    if (err) console.error("Error writing GET log:", err);
-  });
-
-  next();
 }
 
-// POST logging middleware
-function postLog(req, res, next) {
-  // Ensure the log file exists
-  if (!fs.existsSync(logFilePath)) {
-    fs.writeFileSync(logFilePath, "", "utf8");
-  }
-
-  const logMessage = `[${new Date().toISOString()}] Request: POST, Body: ${JSON.stringify(
-    req.body
-  )}`;
-  fs.appendFile(logFilePath, logMessage + "\n", (err) => {
-    if (err) console.error("Error writing POST log:", err);
-  });
-
-  next();
-}
-
-module.exports = { getLog, postLog };
+module.exports = Log;

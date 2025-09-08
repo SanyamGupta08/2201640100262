@@ -1,14 +1,23 @@
 const UrlService = require("../service/url-service");
 const geoip = require("geoip-lite");
+const Log = require("./../../Logging Middleware/index");
 
 const urlService = new UrlService();
 
 // Create and save a shortened URL
 const saveUrlInfo = async (req, res) => {
   try {
+    console.log(req.body)
     const url = await urlService.createShortUrl(req.body);
+    await Log(
+      "backend",
+      "info",
+      "controller",
+      "Short URL created successfully"
+    );
     res.status(201).json(url);
   } catch (error) {
+    await Log("backend", "error", "controller", error.message);
     res.status(500).json({ error: error.message });
   }
 };
@@ -19,6 +28,7 @@ const getUrlInfo = async (req, res) => {
     const url = await urlService.getUrlDetails(req.params.id);
 
     if (!url || !url.data) {
+      await Log("backend", "warn", "controller", "URL not found or expired");
       return res.status(404).json({ error: "URL not found or expired" });
     }
 
@@ -29,6 +39,13 @@ const getUrlInfo = async (req, res) => {
     const geo = geoip.lookup(ip);
     const location = geo ? `${geo.country}, ${geo.city || ""}` : "Unknown";
 
+    await Log(
+      "backend",
+      "info",
+      "controller",
+      "URL info retrieved successfully"
+    );
+
     res.status(200).json({
       ...url.data,
       clickDetails: {
@@ -38,6 +55,7 @@ const getUrlInfo = async (req, res) => {
       },
     });
   } catch (error) {
+    await Log("backend", "error", "controller", error.message);
     res.status(500).json({ error: error.message });
   }
 };

@@ -1,4 +1,5 @@
 const UrlRepository = require("../repository/url-repository");
+const Log = require("./../../Logging Middleware/index");
 
 class UrlService {
   constructor() {
@@ -8,28 +9,20 @@ class UrlService {
   // Create and save a shortened URL
   async createShortUrl({ url, validity = 30, shortcode }) {
     try {
-      // expiry time in ISO format
       const expiryTime = new Date(Date.now() + validity * 60000).toISOString();
+      const shortCode = `${shortcode}${Date.now()}`;
 
-      // generate shortcode if not provided, ensure uniqueness
-      const shortCode = shortcode || (await this.generateUniqueShortCode());
+      // Directly store the shortcode, no full URL added
+      const urlData=await this.urlRepository.saveUrl({ url: url, shortCode: shortCode, validity: expiryTime });
+      await Log("backend", "info", "service", "Short URL created");
 
-      // construct shortLink
-      const shortLink = `https://hostname:port/${shortCode}`;
-
-      // save in repository
-      await this.urlRepository.saveUrl(url, shortCode, expiryTime);
-
-      return {
-        shortLink,
-        expiry: expiryTime,
-      };
+      return urlData; // Return shortcode only
     } catch (err) {
+      await Log("backend", "error", "service", err.message);
       throw new Error("Error creating short URL: " + err.message);
     }
   }
 
-  // Random shortcode generator
   generateShortCode(length = 6) {
     const chars =
       "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -40,7 +33,6 @@ class UrlService {
     return result;
   }
 
-  // Ensure generated code is unique
   async generateUniqueShortCode(length = 6) {
     let code;
     let exists = true;
@@ -51,39 +43,44 @@ class UrlService {
     return code;
   }
 
-  // Retrieve URL info (increments clicks)
-  async getUrlDetails(shortendUrl) {
+  async getUrlDetails(shortCode) {
     try {
-      const urlInfo = await this.urlRepository.getUrlInfo(shortendUrl);
+      const urlInfo = await this.urlRepository.getUrlInfo(shortCode);
       if (!urlInfo) {
+        await Log("backend", "warn", "service", "Short URL not found");
         return { message: "Short URL not found", data: null };
       }
 
-      // Check expiry
       const now = new Date();
       const expiry = new Date(urlInfo.validity);
       if (expiry && now > expiry) {
+        await Log("backend", "warn", "service", "Short URL expired");
         return { message: "Short URL has expired", data: null };
       }
 
-      return {
-        message: "Short URL details fetched",
-        data: urlInfo,
-      };
+      await Log("backend", "info", "service", "Short URL details fetched");
+      return { message: "Short URL details fetched", data: urlInfo };
     } catch (err) {
+      await Log("backend", "error", "service", err.message);
       throw new Error("Error fetching URL details: " + err.message);
     }
   }
 
-  // Delete expired URLs
   async cleanupExpiredUrls() {
     try {
       const deletedCount = await this.urlRepository.deleteExpiredUrls();
+      await Log(
+        "backend",
+        "info",
+        "service",
+        `Cleaned ${deletedCount} expired URLs`
+      );
       return {
         message: `Deleted ${deletedCount} expired URLs`,
         deletedCount,
       };
     } catch (err) {
+      await Log("backend", "error", "service", err.message);
       throw new Error("Error cleaning expired URLs: " + err.message);
     }
   }
